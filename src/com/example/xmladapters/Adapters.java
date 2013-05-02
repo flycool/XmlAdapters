@@ -1,10 +1,16 @@
 package com.example.xmladapters;
 
+import android.app.Activity;
 import android.content.Context;
 import android.database.Cursor;
+import android.net.Uri;
+import android.os.AsyncTask;
 import android.support.v4.widget.SimpleCursorAdapter;
 import android.view.View;
 import android.widget.BaseAdapter;
+import android.widget.TextView;
+
+import java.util.HashMap;
 
 /**
  * <p>This class can be used to load {@link android.widget.Adapter adapters} defined in
@@ -294,19 +300,134 @@ public class Adapters {
     }
     
     private static class XmlCursorAdapter extends SimpleCursorAdapter implements ManagedAdapter {
-
-        public XmlCursorAdapter(Context context, int layout, Cursor c, String[] from, int[] to,
-                int flags) {
-            super(context, layout, c, from, to, flags);
+        private Context mContext;
+        private String mUri;
+        private final String mSelection;
+        private final String[] mSelectionArgs;
+        private final String mSortOrder;
+        private final int[] mTo;
+        private final String[] mFrom;
+        private final String[] mColumns;
+        private final CursorBinder[] mBinders;
+        private AsyncTask<Void,Void,Cursor> mLoadTask;
+        
+        public XmlCursorAdapter(Context context, int layout, String uri, String[] from, int[] to,
+                String selection, String[] selectionArgs, String sortOrder,
+                HashMap<String, CursorBinder> binders) {
+            super(context, layout, null, from, to);
+            mContext = context;
+            mUri = uri;
+            mFrom = from;
+            mTo = to;
+            mSelection = selection;
+            mSelectionArgs = selectionArgs;
+            mSortOrder = sortOrder;
+            mColumns = new String[from.length + 1];
+            // This is mandatory in CursorAdapter
+            mColumns[0] = "_id";
+            System.arraycopy(from, 0, mColumns, 1, from.length);
+            
+            CursorBinder basic = new StringBinder(context, new IdentityTransformation(context));
+            final int count = from.length;
+            mBinders = new CursorBinder[count];
+            
+            for (int i=0; i<count; i++) {
+                CursorBinder binder = binders.get(from[i]);
+                if (binder == null) binder = basic;
+                mBinders[i] = binder;
+            }
+        }
+        
+        @Override
+        public void bindView(View view, Context context, Cursor cursor) {
+            final int count = mTo.length;
+            final int[] to = mTo;
+            final CursorBinder[] binders = mBinders;
+            
+            for (int i=0; i<count; i++) {
+                final View v = view.findViewById(to[i]);
+                if (v != null) {
+                    // Not optimal, the column index could be cached
+                    binders[i].bind(view, cursor, cursor.getColumnIndex(mFrom[i]));
+                }
+            }
         }
 
         @Override
         public void load() {
+            if (mUri != null) {
+                mLoadTask = new QueryTask().execute();
+            }
+        }
+        
+        void seturi(String uri) {
+            mUri = uri;
+        }
+        
+        @Override
+        public void changeCursor(Cursor cursor) {
+            if (mLoadTask != null && mLoadTask.getStatus() != QueryTask.Status.FINISHED) {
+                mLoadTask.cancel(true);
+                mLoadTask = null;
+            }
+            super.changeCursor(cursor);
+        }
+        
+        class QueryTask extends AsyncTask<Void, Void, Cursor> {
+            @Override
+            protected Cursor doInBackground(Void... params) {
+                if (mContext instanceof Activity) {
+                    return ((Activity) mContext).managedQuery(
+                            Uri.parse(mUri), mColumns, mSelection, mSelectionArgs, mSortOrder);
+                } else {
+                    return mContext.getContentResolver().query(
+                            Uri.parse(mUri), mColumns, mSelection, mSelectionArgs, mSortOrder);
+                }
+            }
+            
+            @Override
+            protected void onPostExecute(Cursor result) {
+                if (!isCancelled()) {
+                    
+                }
+            }
             
         }
         
     }
     
+    /**
+     * Binds a String to a TextView.
+     */
+    private static class StringBinder extends CursorBinder {
+        public StringBinder(Context context, CursorTransformation transformation) {
+            super(context, transformation);
+        }
+        
+        @Override
+        public boolean bind(View view, Cursor cursor, int columnIndex) {
+            if (view instanceof TextView) {
+                final String text = mTransformation.transform(cursor, columnIndex);
+                ((TextView) view).setText(text);
+                return true;
+            }
+            return false;
+        }
+        
+    }
+    
+    
+    private static class IdentityTransformation extends CursorTransformation {
+        public IdentityTransformation(Context context) {
+            super(context);
+        }
+
+        @Override
+        public String transform(Cursor cursor, int columnIndex) {
+            return cursor.getString(columnIndex);
+        }
+        
+    }
 }
 
 
