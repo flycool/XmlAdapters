@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="action_settings">Settings</string>
+    <string name="hello_world">Hello world!</string>
+
+    <string name="app_name">Xml Adapters</string>
+    <string name="contacts_list_activity">Xml Contacts Adapter</string>
+    <string name="photos_list_activity">Xml Photos Adapter</string>
+    <string name="rss_reader_activity">Xml RSS Reader</string>
+    <string name="no_contacts">No contacts available</string>
+    <string name="no_photos">Loading photos...</string>
+    <string name="no_rss_feed">Loading RSS feed...</string>
+</resources>
