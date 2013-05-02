@@ -295,8 +295,11 @@ public class Adapters {
     
     private static class XmlCursorAdapter extends SimpleCursorAdapter implements ManagedAdapter {
 
-        
-        
+        public XmlCursorAdapter(Context context, int layout, Cursor c, String[] from, int[] to,
+                int flags) {
+            super(context, layout, c, from, to, flags);
+        }
+
         @Override
         public void load() {
             
