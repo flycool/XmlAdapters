@@ -2,14 +2,22 @@ package com.example.xmladapters;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.res.Resources;
+import android.content.res.TypedArray;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.support.v4.widget.SimpleCursorAdapter;
+import android.util.AttributeSet;
 import android.view.View;
 import android.widget.BaseAdapter;
 import android.widget.TextView;
 
+import org.xmlpull.v1.XmlPullParser;
+import org.xmlpull.v1.XmlPullParserException;
+
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 /**
@@ -288,11 +296,135 @@ public class Adapters {
         return null;
     }
     
+    private static BaseAdapter createAdapterFromXml(Context c,
+            XmlPullParser parser, AttributeSet attrs, int id, Object[] parameters,
+            String assertName) throws XmlPullParserException, IOException {
+        
+        BaseAdapter adapter = null;
+        
+        // Make sure we are on a start tag.
+        int type;
+        int depth = parser.getDepth();
+        
+        while(((type = parser.next()) != XmlPullParser.END_TAG || parser.getDepth() > depth) &&
+                type != XmlPullParser.END_DOCUMENT) {
+            
+            if (type != XmlPullParser.START_TAG) {
+                continue;
+            }
+            
+            String name = parser.getName();
+            if (assertName != null && !assertName.equals(name)) {
+                throw new IllegalArgumentException("The adapter defined in " +
+                        c.getResources().getResourceEntryName(id) + " must be a <" +
+                        assertName + " />");
+            }
+            
+            if (ADAPTER_CURSOR.equals(name)) {
+                adapter = createCursorAdapter(c, parser, attrs, id, parameters);
+            } else {
+                throw new IllegalArgumentException("Unknown adapter name " + parser.getName() +
+                        " in " + c.getResources().getResourceEntryName(id));
+            }
+        }
+        
+        return adapter;
+    }
+    
+    private static XmlCursorAdapter createCursorAdapter(Context c, XmlPullParser parser,
+            AttributeSet attrs, int id, Object[] parameters)
+            throws IOException, XmlPullParserException {
+        
+        return new XmlCursorAdapterParser(c, parser, attrs, id).parser(parameters);
+    }
+    
+    /**
+     * Parser that can generate XmlCursorAdapter instances. This parser is responsible for
+     * handling all the attributes and child nodes for a &lt;cursor-adapter /&gt;.
+     */
     private static class XmlCursorAdapterParser {
+        private static final String ADAPTER_CURSOR_BIND = "bind";
+        private static final String ADAPTER_CURSOR_SELECT = "select";
+        private static final String ADAPTER_CURSOR_AS_STRING = "string";
+        private static final String ADAPTER_CURSOR_AS_IMAGE = "image";
+        private static final String ADAPTER_CURSOR_AS_TAG = "tag";
+        private static final String ADAPTER_CURSOR_AS_IMAGE_URI = "image-uri";
+        private static final String ADAPTER_CURSOR_AS_DRAWABLE = "drawable";
+        private static final String ADAPTER_CURSOR_MAP = "map";
+        private static final String ADAPTER_CURSOR_TRANSFORM = "transform";
         
+        private final Context mContext;
+        private final XmlPullParser mParser;
+        private final AttributeSet mAttrs;
+        private final int mId;
+
+        private final HashMap<String, CursorBinder> mBinders;
+        private final ArrayList<String> mFrom;
+        private final ArrayList<Integer> mTo;
+        private final CursorTransformation mIdentity;
+        private final Resources mResources;
         
+        public XmlCursorAdapterParser(Context c, XmlPullParser parser, AttributeSet attrs, int id) {
+            mContext = c;
+            mParser = parser;
+            mAttrs = attrs;
+            mId = id;
+            
+            mResources = mContext.getResources();
+            mBinders = new HashMap<String, CursorBinder>();
+            mFrom = new ArrayList<String>();
+            mTo = new ArrayList<Integer>();
+            mIdentity = new IdentityTransformation(mContext);
+        }
         
+        public XmlCursorAdapter parser(Object[] parameters) 
+                throws IOException, XmlPullParserException {
+            Resources resources = mResources;
+            TypedArray a = resources.obtainAttributes(mAttrs,  R.styleable.CursorAdapter);
+            
+            String uri = a.getString(R.styleable.CursorAdapter_uri);
+            String selection = a.getString(R.styleable.CursorAdapter_selection);
+            String sortOrder = a.getString(R.styleable.CursorAdapter_sortOrder);
+            int layout = a.getResourceId(R.styleable.CursorAdapter_layout, 0);
+            if (layout == 0) {
+                throw new IllegalArgumentException("The layout specified in " +
+                        resources.getResourceEntryName(mId) + " does not exist");
+            }
+            
+            a.recycle();
+            
+            XmlPullParser parser = mParser;
+            int type;
+            int depth = parser.getDepth();
+            
+            while(((type = parser.next()) != XmlPullParser.END_TAG || parser.getDepth() > depth ) &&
+                    type != XmlPullParser.END_DOCUMENT) {
+                
+                if (type != XmlPullParser.START_TAG) {
+                    continue;
+                }
+                
+                String name = parser.getName();
+                
+                if (ADAPTER_CURSOR_BIND.equals(name)) {
+                    parseBindTag();
+                } else if (ADAPTER_CURSOR_SELECT.equals(name)) {
+                    //parseSelectTag();
+                } else {
+                    throw new RuntimeException("Unknown tag name " + parser.getName() + " in " +
+                            resources.getResourceEntryName(mId));
+                }
+                
+                
+            }
+            
+            
+            return null;
+        }
         
+        private void parseBindTag() throws IOException, XmlPullParserException {
+            
+        }
     }
     
     private static interface ManagedAdapter {
@@ -348,7 +480,7 @@ public class Adapters {
                 final View v = view.findViewById(to[i]);
                 if (v != null) {
                     // Not optimal, the column index could be cached
-                    binders[i].bind(view, cursor, cursor.getColumnIndex(mFrom[i]));
+                    binders[i].bind(v, cursor, cursor.getColumnIndex(mFrom[i]));
                 }
             }
         }
